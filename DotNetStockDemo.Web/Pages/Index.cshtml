@@ -1,0 +1,17 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Trades";
+}
+
+<div>
+	<h1 class="display-4">Trades Demo</h1>
+	<p>The box below displays the N latest trades in real-time (most recent at the top).</p>
+</div>
+
+<div id="trades" style="border: 1px solid #dddddd; padding: 10px; font-family: monospace; margin-top: 20px">
+
+</div>
+
+<script src="~/js/signalr/dist/browser/signalr.js"></script>
+<script src="~/js/trades.js"></script>
