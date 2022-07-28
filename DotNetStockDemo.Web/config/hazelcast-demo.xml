@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hazelcast xmlns="http://www.hazelcast.com/schema/config"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://www.hazelcast.com/schema/config
+           http://www.hazelcast.com/schema/config/hazelcast-config-5.1.xsd">
+
+  <!--
+  
+    see https://docs.hazelcast.com/hazelcast/5.1/data-structures/managing-map-memory#eviction-policy
+    
+    eviction:
+      evict last recently used map entries
+      max-size PER_NODE = max number of entries in each cluster member
+      size = 40 entries
+      
+    expiration:
+      time-to-live-seconds = max N seconds
+      but: that does not work, as the query will hit the entry?
+
+  -->
+
+  <map name="trade_map">
+    <time-to-live-seconds>60</time-to-live-seconds>
+    <eviction eviction-policy="LRU" size="40" max-size-policy="PER_NODE" />
+  </map>
+
+
+</hazelcast>

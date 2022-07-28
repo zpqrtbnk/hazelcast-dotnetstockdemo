@@ -72,8 +72,17 @@ see https://github.com/rmoff/kafka-listeners/blob/master/docker-compose.yml
 Run SQL cli:
 docker run --network hazelcast-network -it --rm hazelcast/hazelcast:5.1.2 hz-cli --targets username@172.18.0.2 sql
 
+or in docker:
+bin/hz-cli -t=dotnet-stock-demo@192.168.1.89:5702 sql
+
 resources
 [1] https://www.red-gate.com/simple-talk/development/dotnet-development/using-apache-kafka-with-net/
 [2] https://towardsdatascience.com/how-to-install-apache-kafka-using-docker-the-easy-way-4ceb00817d8b
 [3] https://www.conduktor.io/kafka/kafka-advertised-host-setting
 [4] https://github.com/wurstmeister/kafka-docker/blob/master/README.md
+
+convenient aliases:
+alias dn=dotnet
+alias dk=docker
+alias dkc=docker-compose
+alias dkx=docker exec -it

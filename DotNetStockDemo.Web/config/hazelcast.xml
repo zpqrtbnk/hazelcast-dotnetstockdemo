@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hazelcast xmlns="http://www.hazelcast.com/schema/config"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://www.hazelcast.com/schema/config
+           http://www.hazelcast.com/schema/config/hazelcast-config-5.1.xsd">
+
+  <!-- 
+    about importing configuration: 
+    https://docs.hazelcast.com/hazelcast/5.1/configuration/configuring-declaratively
+  -->
+
+  <!-- import the original configuration from the docker container -->
+  <import resource="/opt/hazelcast/config/hazelcast-docker.xml" />
+
+  <!-- and extend it with our own stuff... -->
+  <import resource="/opt/host-config/hazelcast-demo.xml" />
+
+</hazelcast>

@@ -59,6 +59,9 @@ services:
   # - https://docs.hazelcast.com/hazelcast/5.1/deploy/deploying-with-docker
   # - https://github.com/hazelcast/hazelcast-docker/issues/56
   #
+  # we use a config file on the host, which imports the config file on the container,
+  # and specifies an expiration rule for the trade_map map, in order not to leak memory.
+  #
   # uncomment the 'ports' and 'JAVA_OPTS publicAddress' section to expose to the host
 
   hazelcast-1:
@@ -71,6 +74,9 @@ services:
     environment:
       HZ_CLUSTERNAME: "dotnet-stock-demo"
       #JAVA_OPTS: "-Dhazelcast.local.publicAddress=192.168.1.89:5701"
+      HAZELCAST_CONFIG: /opt/host-config/hazelcast.xml
+    volumes:
+      - ./config:/opt/host-config
 
 #  hazelcast-2:
 #    # profiles: [ "two-members" ]
@@ -83,6 +89,9 @@ services:
 #    environment:
 #      HZ_CLUSTERNAME: "dotnet-stock-demo"
 #      #JAVA_OPTS: "-Dhazelcast.local.publicAddress=192.168.1.89:5702"
+#      HAZELCAST_CONFIG: /opt/host-config/hazelcast.xml
+#    volumes:
+#      - ./config:/opt/host-config
 
   # DEMO
 
