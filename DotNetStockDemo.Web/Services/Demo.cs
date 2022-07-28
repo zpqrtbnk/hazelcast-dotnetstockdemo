@@ -40,7 +40,7 @@ public class Demo : IHostedService
             _cancellation.Cancel();
             try
             {
-                await _runningDemo;
+                await _runningDemo.ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             { }
@@ -57,50 +57,56 @@ public class Demo : IHostedService
         KafkaService kafkaService = default!;
         HazelcastService hazelcastService = default!;
 
-        var getKafka = Task.Run(async () =>
-        {
-            kafkaService = new KafkaService(_options, _loggerFactory);
-            await kafkaService.Initialize();
-            await kafkaService.PurgeTopic();
-        });
+        // need to wait for long enough - give time for everything to setup in docker
+        var timeout = TimeSpan.FromMinutes(4);
 
-        var getHazelcast = Task.Run(async () =>
+        var getServices = Task.Run(async () =>
         {
-            hazelcastService = new HazelcastService(_options, _loggerFactory);
-            await hazelcastService.Connect();
-            await hazelcastService.Initialize();
+            // ensure Kafka first else Hazelcast JET job cannot run
+            // we have no timeout on Kafka - this will hang until we can connect
+            kafkaService = new KafkaService(_options, _loggerFactory);
+            await kafkaService.Initialize().ConfigureAwait(false);
+            await kafkaService.PurgeTopic().ConfigureAwait(false);
+
+            // now it's OK to talk to Hazelcast
+            hazelcastService = new HazelcastService(_options, (int)timeout.TotalMilliseconds, _loggerFactory);
+            await hazelcastService.Connect().ConfigureAwait(false);
+            await hazelcastService.Initialize().ConfigureAwait(false);
         });
 
         try
         {
-            var timeout = Task.Delay(10_000, cancellationToken);
-            var getServices = Task.WhenAll(getKafka, getHazelcast);
-            var t = await Task.WhenAny(getServices, timeout);
-            if (t == timeout)
+            var timeoutTask = Task.Delay(timeout, cancellationToken);
+            var task = await Task.WhenAny(getServices, timeoutTask).ConfigureAwait(false);
+            if (task == timeoutTask)
             {
+                // we are not going to wait for services - maybe the whole things hangs
                 _logger.LogError("Timeout when getting services - the demo is NOT running");
                 return;
             }
 
-            await getServices;
-
+            // handles exceptions
+            await getServices.ConfigureAwait(false);
             if (kafkaService == null || hazelcastService == null)
                 throw new Exception("Missing services.");
 
+            // handles cancellation
             cancellationToken.ThrowIfCancellationRequested();
 
-            // start tasks
+            // run!
+            _logger.LogInformation("Initialization completed, now running");
             var feedKafka = Try(() => FeedKafka(kafkaService, cancellationToken));
             var readHazelcast = Try(() => ReadTradeMap(hazelcastService.Client, cancellationToken));
             var readTrades = Try(() => ReadTrades(hazelcastService.Client, cancellationToken));
 
             // wait
-            await Task.WhenAll(feedKafka, readHazelcast, readTrades);
+            await Task.WhenAll(feedKafka, readHazelcast, readTrades).ConfigureAwait(false);
         }
         finally
         {
+            _logger.LogInformation("Tearing down services");
             try { kafkaService?.Dispose(); } catch { }
-            if (hazelcastService != null) try { await hazelcastService.DisposeAsync(); } catch { }
+            if (hazelcastService != null) try { await hazelcastService.DisposeAsync().ConfigureAwait(false); } catch { }
 ;        }
     }
 
@@ -108,7 +114,7 @@ public class Demo : IHostedService
     {
         try
         {
-            await f();
+            await f().ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -131,8 +137,8 @@ public class Demo : IHostedService
             var ticker = Stocks.All[rand.Next(0, Stocks.All.Length)].Ticker;
             var price = 50f + rand.NextSingle() * 100;
             var qty = rand.Next(20, 1000);
-            await kafkaService.SendTrade(ticker, price, qty);
-            await Task.Delay(1000, cancellationToken);
+            await kafkaService.SendTrade(ticker, price, qty).ConfigureAwait(false);
+            await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -145,10 +151,10 @@ public class Demo : IHostedService
             // if lastId is -1 we get an overflow exception, if it's zero we get a '0 parameters' exception
             // there is something obviously wrong in our client code here?!
             //var result = await hazelcastClient.Sql.ExecuteQueryAsync("SELECT id, ticker, name, price, qty FROM trade_map WHERE id > ?", new object[ lastId ]);
-            var result = await hazelcastClient.Sql.ExecuteQueryAsync($"SELECT id, ticker, name, price, qty FROM trade_map WHERE id > {lastId}");
+            var result = await hazelcastClient.Sql.ExecuteQueryAsync($"SELECT id, ticker, name, price, qty FROM trade_map WHERE id > {lastId}").ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
 
-            await foreach (var row in result.WithCancellation(cancellationToken))
+            await foreach (var row in result.WithCancellation(cancellationToken).ConfigureAwait(false))
             {
                 try
                 {
@@ -159,7 +165,7 @@ public class Demo : IHostedService
                     var qty = row.GetColumn<long>("qty");
 
                     _logger.LogInformation($"trade_map:{id} {ticker} {name} {price:F3} {qty}");
-                    await _hubContext.Clients.All.SendAsync("ReceiveTrade", id, ticker, name, qty, price, true, 0);
+                    await _hubContext.Clients.All.SendAsync("ReceiveTrade", id, ticker, name, qty, price, true, 0).ConfigureAwait(false);
                     lastId = Math.Max(lastId, id);
 
                 }
@@ -169,16 +175,16 @@ public class Demo : IHostedService
                 }
             }
 
-            await Task.Delay(1000); // throttle
+            await Task.Delay(1000).ConfigureAwait(false); // throttle
         }
     }
 
     private async Task ReadTrades(IHazelcastClient hazelcastClient, CancellationToken cancellationToken)
     {
-        var result = await hazelcastClient.Sql.ExecuteQueryAsync("SELECT * FROM trades");
+        var result = await hazelcastClient.Sql.ExecuteQueryAsync("SELECT * FROM trades").ConfigureAwait(false);
 
         // no need for a while (true) loop here: reading from trades is blocking
-        await foreach (var row in result.WithCancellation(cancellationToken))
+        await foreach (var row in result.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
             try
             {

@@ -9,11 +9,13 @@ internal class HazelcastService : IAsyncDisposable
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger _logger;
     private readonly DemoOptions _options;
+    private readonly int _clusterConnectionTimeoutMilliseconds;
     private IHazelcastClient? _client;
 
-    public HazelcastService(DemoOptions options, ILoggerFactory loggerFactory)
+    public HazelcastService(DemoOptions options, int clusterConnectionTimeoutMilliseconds, ILoggerFactory loggerFactory)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _clusterConnectionTimeoutMilliseconds = clusterConnectionTimeoutMilliseconds;
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _logger = loggerFactory.CreateLogger<HazelcastService>();
     }
@@ -29,7 +31,7 @@ internal class HazelcastService : IAsyncDisposable
 
         //if (_client is not null) 
         if (_client is IAsyncDisposable disposable)
-            await disposable.DisposeAsync();
+            await disposable.DisposeAsync().ConfigureAwait(false);
     }
 
     public async Task Connect()
@@ -40,7 +42,7 @@ internal class HazelcastService : IAsyncDisposable
                 o.ClusterName = _options.HazelcastClusterName;
                 o.Networking.SmartRouting = false; // FIXME because the Docker member will only report its internal address :(
                 o.Networking.Addresses.Add($"{_options.HazelcastServer}:{_options.HazelcastPort}");
-                o.Networking.ConnectionRetry.ClusterConnectionTimeoutMilliseconds = 1000;
+                o.Networking.ConnectionRetry.ClusterConnectionTimeoutMilliseconds = _clusterConnectionTimeoutMilliseconds;
 
                 o.LoggerFactory.Creator = () => _loggerFactory;
             })
@@ -48,7 +50,7 @@ internal class HazelcastService : IAsyncDisposable
 
         _logger.LogInformation($"Connect to Hazelcast at {_options.HazelcastServer}:{_options.HazelcastPort}");
 
-        _client = await HazelcastClientFactory.StartNewClientAsync(options);
+        _client = await HazelcastClientFactory.StartNewClientAsync(options).ConfigureAwait(false);
     }
 
     public async Task Initialize()
@@ -56,34 +58,49 @@ internal class HazelcastService : IAsyncDisposable
         if (_client == null) throw new InvalidOperationException("No client");
 
         _logger.LogInformation("Create TRADES mapping");
-        var rc = await _client.Sql.ExecuteCommandAsync(CreateTradesMapping);
+        var rc = await _client.Sql.ExecuteCommandAsync(CreateTradesMapping).ConfigureAwait(false);
 
         _logger.LogInformation("Create COMPANIES mapping");
         // NOTE: replacing the mapping does not purge the map + code to destroy without creating exists but is internal
-        var m = await _client.GetMapAsync<object, object>("companies");
-        await _client.DestroyAsync(m);
-        rc = await _client.Sql.ExecuteCommandAsync(CreateCompaniesMapping);
+        var m = await _client.GetMapAsync<object, object>("companies").ConfigureAwait(false);
+        await _client.DestroyAsync(m).ConfigureAwait(false);
+        rc = await _client.Sql.ExecuteCommandAsync(CreateCompaniesMapping).ConfigureAwait(false);
 
         _logger.LogInformation("Insert COMPANIES data");
-        await using (var map = await _client.GetMapAsync<string, HazelcastJsonValue>("companies"))
+        var map = await _client.GetMapAsync<string, HazelcastJsonValue>("companies").ConfigureAwait(false);
+        await using (var mapd = ((IAsyncDisposable)map).ConfigureAwait(false))
         {
             var values = Stocks.All
                 .Select(s => (s.Ticker, new HazelcastJsonValue($"{{ \"ticker\": \"{s.Ticker}\", \"name\": \"{s.Name}\", \"cap\": {s.Cap.ToString(CultureInfo.InvariantCulture)} }}")))
                 .ToDictionary(x => x.Item1, x => x.Item2);
 
-            await map.SetAllAsync(values);
+            await map.SetAllAsync(values).ConfigureAwait(false);
         }
 
         _logger.LogInformation("Create TRADE_MAP mapping");
         // NOTE: replacing the mapping does not purge the map + code to destroy without creating exists but is internal
-        m = await _client.GetMapAsync<object, object>("trade_map");
-        await _client.DestroyAsync(m);
-        rc = await _client.Sql.ExecuteCommandAsync(CreateTradesMapMapping);
+        m = await _client.GetMapAsync<object, object>("trade_map").ConfigureAwait(false);
+        await _client.DestroyAsync(m).ConfigureAwait(false);
+        rc = await _client.Sql.ExecuteCommandAsync(CreateTradesMapMapping).ConfigureAwait(false);
 
         _logger.LogInformation("Create INGEST_TRADES job");
-        rc = await _client.Sql.ExecuteCommandAsync("DROP JOB IF EXISTS ingest_trades");
-        rc = await _client.Sql.ExecuteCommandAsync(CreateIngestTradesJob);
+        rc = await _client.Sql.ExecuteCommandAsync("DROP JOB IF EXISTS ingest_trades").ConfigureAwait(false);
+        rc = await _client.Sql.ExecuteCommandAsync(CreateIngestTradesJob).ConfigureAwait(false);
     }
+
+    //    private string CreateTradesMapping => $@"CREATE OR REPLACE MAPPING trades (
+    //    id     BIGINT,
+    //    ticker VARCHAR,
+    //    price  DECIMAL,
+    //    qty    BIGINT
+    //)
+    //TYPE File
+    //OPTIONS (
+    //    'path' = '/var/run/trades',
+    //    'format' = 'json-flat',
+    //    'glob' = 'trade-*.json',
+    //    'ignoreFileNotFound' = 'true'
+    //);";
 
     private string CreateTradesMapping => $@"CREATE OR REPLACE MAPPING trades (
     id     BIGINT,

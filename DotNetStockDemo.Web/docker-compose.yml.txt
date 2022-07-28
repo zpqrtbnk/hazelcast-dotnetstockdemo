@@ -1,0 +1,98 @@
+version: '3'
+#
+# this is the text/verbose version of docker-compose.yml
+#
+# source:
+# source: https://developer.confluent.io/quickstart/kafka-docker/
+#
+# if this file is in directory 'foo' then all apps launch in network foo_default
+# unless we explicitly put everything on a dotnetstockdemo network
+
+services:
+
+  zookeeper:
+    #image: wurstmeister/zookeeper
+    image: confluentinc/cp-zookeeper:7.0.1
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    #ports:
+    #  - "2181:2181"
+    #networks:
+    #  - dotnetstockdemo
+
+  kafka:
+    #image: wurstmeister/kafka
+    image: confluentinc/cp-kafka:7.0.1
+    container_name: kafka
+    #ports:
+    #  - "9092:9092"
+    depends_on:
+      - zookeeper
+    #networks:
+    #  - dotnetstockdemo
+    environment:
+      # PLAINTEXT = listener is no authentication, no encryption
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      #KAFKA_CREATE_TOPICS: "simpletalk_topic:1:1"
+      
+      ####KAFKA_ADVERTISED_HOST_NAME: 192.168.1.89
+      
+      KAFKA_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://kafka:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://192.168.1.89:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+
+      ##KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      ##KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://192.168.1.89:9092
+      #KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      #KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://192.168.1.89:9092,PLAINTEXT_INTERNAL://kafka:29092
+      
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      
+      #KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      #KAFKA_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://192.168.1.89:9092
+    #volumes:
+    #  - /var/run/docker.sock:/var/run/docker.sock
+
+  hazelcast:
+    image: hazelcast/hazelcast:5.1.2
+    container_name: hazelcast
+    #ports:
+    #  - "5701:5701"
+    #networks:
+    #  - dotnetstockdemo
+    environment:
+      HZ_CLUSTERNAME: "dotnet-stock-demo"
+    #volumes:
+    #  - ./trades:/var/run/trades
+
+  dotnetstockdemo:
+    image: zpqrtbnk/dotnetstockdemo
+    container_name: dotnetstockdemo
+    ports:
+      - "7001:7001"
+    depends_on:
+      - kafka
+      - hazelcast
+#    networks:
+#      - dotnetstockdemo
+    environment:
+      DotNetStockDemo__HazelcastServer: hazelcast
+      DotNetStockDemo__KafkaServer: kafka
+      DotNetStockDemo__KafkaPort: 29092
+      # for Mac M1 (FileSystemWatcher is not implemented) - or is it DOTNET_hostBuilder__...?
+      # https://github.com/dotnet/aspnetcore/issues/38876
+      # https://docs.microsoft.com/en-us/aspnet/core/fundamentals/host/generic-host?view=aspnetcore-6.0#disable-app-configuration-reload-on-change
+      #hostBuilder__reloadConfigOnChange: false
+#  kafkacat:
+#    image: confluentinc/cp-kafkacat
+#    command: sleep infinity
+
+#networks:
+#  dotnetstockdemo:
+#    driver: bridge

@@ -27,13 +27,20 @@ internal class KafkaService : IDisposable
 
     public async Task SendTrade(string ticker, float price, int qty)
     {
-        if (_producer == null) throw new InvalidOperationException("No producer.");
+        //if (_producer == null) throw new InvalidOperationException("No producer.");
+        var producerConfig = new ProducerConfig { BootstrapServers = $"{_options.KafkaServer}:{_options.KafkaPort}" };
+        using var producer = new ProducerBuilder<long, string>(producerConfig)
+            .SetLogHandler((_, message) => _logger.LogInformation($"Kafka: {message.Message}"))
+            .SetErrorHandler((_, error) => _logger.LogWarning($"Kafka: {error.Code} {error.Reason}"))
+            .Build();
 
-        _logger.LogInformation($"Send to Kafka: {ticker} {qty} @ {price:F3}");
+        _logger.LogInformation($"Send to Kafka '{_options.KafkaTopicName}': {ticker} {qty} @ {price:F3}");
 
         var id = Interlocked.Increment(ref _idSequence);
         var value = $"{{ \"id\": {id}, \"ticker\": \"{ticker}\", \"price\": {price.ToString(CultureInfo.InvariantCulture)}, \"qty\": {qty} }}";
-        await _producer.ProduceAsync(_options.KafkaTopicName, new Message<long, string> { Key = id, Value = value });
+        await producer.ProduceAsync(_options.KafkaTopicName, new Message<long, string> { Key = id, Value = value }).ConfigureAwait(false);
+
+        _logger.LogInformation($"Sent to Kafka {_options.KafkaTopicName}: {ticker} {qty} @ {price:F3}");
     }
 
     public async Task Initialize()
@@ -48,7 +55,7 @@ internal class KafkaService : IDisposable
             .Build();
 
         // this is how we would delete the topic (assuming Kafka accepts it)
-        //await adminClient.DeleteTopicsAsync(new[] { kafkaTopicName });
+        //await adminClient.DeleteTopicsAsync(new[] { kafkaTopicName }).ConfigureAwait(false);
 
         var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(10));
         var topicExists = metadata.Topics.Any(x => x.Topic == _options.KafkaTopicName);
@@ -63,15 +70,15 @@ internal class KafkaService : IDisposable
             await adminClient.CreateTopicsAsync(new[]
             {
                 new TopicSpecification { Name = _options.KafkaTopicName, ReplicationFactor = 1, NumPartitions = 1 }
-            });
+            }).ConfigureAwait(false);
         }
 
-        _logger.LogInformation($"Create Kafka producer");
-        var producerConfig = new ProducerConfig { BootstrapServers = $"{_options.KafkaServer}:{_options.KafkaPort}" };
-        _producer = new ProducerBuilder<long, string>(producerConfig)
-            .SetLogHandler((_, message) => _logger.LogInformation($"Kafka: {message.Message}"))
-            .SetErrorHandler((_, error) => _logger.LogWarning($"Kafka: {error.Code} {error.Reason}"))
-            .Build();
+        //_logger.LogInformation($"Create Kafka producer");
+        //var producerConfig = new ProducerConfig { BootstrapServers = $"{_options.KafkaServer}:{_options.KafkaPort}" };
+        //_producer = new ProducerBuilder<long, string>(producerConfig)
+        //    .SetLogHandler((_, message) => _logger.LogInformation($"Kafka: {message.Message}"))
+        //    .SetErrorHandler((_, error) => _logger.LogWarning($"Kafka: {error.Code} {error.Reason}"))
+        //    .Build();
 
         _logger.LogInformation("Kafka has been initialized");
     }
@@ -93,12 +100,12 @@ internal class KafkaService : IDisposable
             { new ConfigResource { Name = _options.KafkaTopicName, Type = ResourceType.Topic }, new() { entry } }
         };
 
-        await adminClient.AlterConfigsAsync(configs);
+        await adminClient.AlterConfigsAsync(configs).ConfigureAwait(false);
 
-        await Task.Delay(4000); // give it time to purge
+        await Task.Delay(4000).ConfigureAwait(false); // give it time to purge
 
         entry.Value = "-1"; // back to infinite retention
-        await adminClient.AlterConfigsAsync(configs);
+        await adminClient.AlterConfigsAsync(configs).ConfigureAwait(false);
 
         _logger.LogInformation($"Kafka topic '{_options.KafkaTopicName}' has been purged");
     }

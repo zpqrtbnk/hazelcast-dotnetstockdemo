@@ -1,0 +1,54 @@
+version: '3'
+
+services:
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.0.1
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.0.1
+    container_name: kafka
+    # uncomment to expose to the host
+    #ports:
+    #  - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+      KAFKA_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://kafka:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://192.168.1.89:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+
+  hazelcast:
+    image: hazelcast/hazelcast:5.1.2
+    container_name: hazelcast
+    # uncomment to expose to the host
+    #ports:
+    #  - "5701:5701"
+    environment:
+      HZ_CLUSTERNAME: "dotnet-stock-demo"
+
+  dotnetstockdemo:
+    image: zpqrtbnk/dotnetstockdemo
+    container_name: dotnetstockdemo
+    ports:
+      - "7001:7001"
+    depends_on:
+      - kafka
+      - hazelcast
+    environment:
+      # these will override the demo options
+      DotNetStockDemo__HazelcastServer: hazelcast
+      DotNetStockDemo__KafkaServer: kafka
+      DotNetStockDemo__KafkaPort: 29092
