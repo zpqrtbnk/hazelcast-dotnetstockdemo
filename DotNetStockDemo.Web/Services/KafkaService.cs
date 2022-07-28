@@ -8,7 +8,7 @@ internal class KafkaService : IDisposable
 {
     private readonly ILogger _logger;
     private readonly DemoOptions _options;
-    private IProducer<long, string>? _producer;
+    //private IProducer<long, string>? _producer;
     private int _idSequence;
 
     public KafkaService(DemoOptions options, ILoggerFactory loggerFactory)
@@ -22,7 +22,7 @@ internal class KafkaService : IDisposable
 
     public void Dispose()
     {
-        _producer?.Dispose();
+        //_producer?.Dispose();
     }
 
     public async Task SendTrade(string ticker, float price, int qty)
