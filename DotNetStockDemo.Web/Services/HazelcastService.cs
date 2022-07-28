@@ -40,11 +40,16 @@ internal class HazelcastService : IAsyncDisposable
             .With(o =>
             {
                 o.ClusterName = _options.HazelcastClusterName;
-                o.Networking.SmartRouting = false; // FIXME because the Docker member will only report its internal address :(
                 o.Networking.Addresses.Add($"{_options.HazelcastServer}:{_options.HazelcastPort}");
                 o.Networking.ConnectionRetry.ClusterConnectionTimeoutMilliseconds = _clusterConnectionTimeoutMilliseconds;
 
                 o.LoggerFactory.Creator = () => _loggerFactory;
+                
+                // beware! if the member advertises the internal docker address,
+                // and smartRouting is enabled, we will try to connect to that address
+                // and fail - this would disable smartRouting.
+                //o.Networking.SmartRouting = false;
+
             })
             .Build();
 

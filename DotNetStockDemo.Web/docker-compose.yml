@@ -1,25 +1,46 @@
 version: '3'
 
+#
+# DOCKER-COMPOSE
+#
+# source: https://developer.confluent.io/quickstart/kafka-docker/
+#
+# notes:
+# - if this file is in directory 'foo' then all apps launch in network foo_default
+#   unless we explicitly put everything on a dotnetstockdemo network.
+# - profiles are only supported starting with version 1.28 of docker-compose.
+
 services:
 
   zookeeper:
+    #image: wurstmeister/zookeeper
     image: confluentinc/cp-zookeeper:7.0.1
     container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    #ports:
+    #  - "2181:2181"
+    #networks:
+    #  - dotnetstockdemo
 
   kafka:
+    #image: wurstmeister/kafka
     image: confluentinc/cp-kafka:7.0.1
     container_name: kafka
-    # uncomment to expose to the host
     #ports:
     #  - "9092:9092"
     depends_on:
       - zookeeper
+    #networks:
+    #  - dotnetstockdemo
     environment:
+      # PLAINTEXT = listener is configured with no authentication and no encryption
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+      #KAFKA_CREATE_TOPICS: "simpletalk_topic:1:1"
+      #KAFKA_ADVERTISED_HOST_NAME: 192.168.1.89
 
       KAFKA_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://kafka:9092
       KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://192.168.1.89:9092
@@ -29,17 +50,44 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    #volumes:
+    #  - /var/run/docker.sock:/var/run/docker.sock
+    
+  # HAZELCAST
+  #
+  # for hazelcast with docker, see:
+  # - https://docs.hazelcast.com/hazelcast/5.1/deploy/deploying-with-docker
+  # - https://github.com/hazelcast/hazelcast-docker/issues/56
+  #
+  # uncomment the 'ports' and 'JAVA_OPTS publicAddress' section to expose to the host
 
-  hazelcast:
+  hazelcast-1:
     image: hazelcast/hazelcast:5.1.2
-    container_name: hazelcast
-    # uncomment to expose to the host
+    container_name: hazelcast-1
     #ports:
     #  - "5701:5701"
+    #networks:
+    #  - dotnetstockdemo
     environment:
       HZ_CLUSTERNAME: "dotnet-stock-demo"
+      #JAVA_OPTS: "-Dhazelcast.local.publicAddress=192.168.1.89:5701"
+
+#  hazelcast-2:
+#    # profiles: [ "two-members" ]
+#    image: hazelcast/hazelcast:5.1.2
+#    container_name: hazelcast-2
+#    #ports:
+#    #  - "5702:5701"
+#    #networks:
+#    #  - dotnetstockdemo
+#    environment:
+#      HZ_CLUSTERNAME: "dotnet-stock-demo"
+#      #JAVA_OPTS: "-Dhazelcast.local.publicAddress=192.168.1.89:5702"
+
+  # DEMO
 
   dotnetstockdemo:
+    #profiles: [ "demo" ]
     image: zpqrtbnk/dotnetstockdemo
     container_name: dotnetstockdemo
     ports:
@@ -47,8 +95,19 @@ services:
     depends_on:
       - kafka
       - hazelcast
+#    networks:
+#      - dotnetstockdemo
     environment:
       # these will override the demo options
-      DotNetStockDemo__HazelcastServer: hazelcast
+      DotNetStockDemo__HazelcastServer: hazelcast-1
       DotNetStockDemo__KafkaServer: kafka
       DotNetStockDemo__KafkaPort: 29092
+      #Hazelcast__Networking__SmartRouting: false
+
+#  kafkacat:
+#    image: confluentinc/cp-kafkacat
+#    command: sleep infinity
+
+#networks:
+#  dotnetstockdemo:
+#    driver: bridge
