@@ -1,102 +1,58 @@
-﻿
-Create the new console application:
+﻿A real-time .NET demo for Hazelcast
 
-dotnet new console DotNetStockDemo
+If running the demo on the host, make sure to
+* expose the Kafka 9092 and Hazelcast 5701 ports to the host
+* update the KAFKA_ADVERTISED_HOST_NAME to be the public host name
+* comment out the dotnetstockdemo service
 
-Add the following NuGet dependencies:
-
-dotnet add package Hazelcast.Net
-dotnet add package Microsoft.Extensions.Logging.Console
-dotnet add package Confluent.Kafka
-
-Create a docker-compose.yml file containing:
-
-version: '2'
-services:
-  zookeeper:
-    image: wurstmeister/zookeeper
-    ports:
-      - "2181:2181"
-  kafka:
-    image: wurstmeister/kafka
-    ports:
-      - "9092:9092"
-    environment:
-      KAFKA_ADVERTISED_HOST_NAME: 192.168.1.89
-      KAFKA_CREATE_TOPICS: "simpletalk_topic:1:1"
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-
-Make sure to update the KAFKA_ADVERTISED_HOST_NAME to be your public Docker host name.
-
-Start Kafka with:
+Start containers with:
 
 docker-compose up -d
 
-You can see it running (both Kafka and Zookeeper) with:
-
-docker ps
-
-Stop Kafka with:
+More commands:
 
 docker-compose stop
+docker-compose down
+docker-compose ps
+docker-compose restart dotnetstockdemo
 
-Start Hazelcast with:
-
-docker run -it --rm -e HZ_CLUSTERNAME=dotnet-stock-demo -p 5701:5701 hazelcast/hazelcast:5.1.2
-
-BUT actually, add this to docker-compose.yml:
-
-  hazelcast:
-    image: hazelcast/hazelcast:5.1.2
-    ports:
-      - 5701:5701
-    environment:
-      HZ_CLUSTERNAME: "dotnet-stock-demo"
-
-And have everything run on docker-compose!
 docker ps
-docker logs <id>
+docker logs <container-id>
+docker exec -it <container-id> /bin/bash
 
-maybe we need this:
+truncate docker logs (dangerous!):
 
-services:
-  whatever:
-    image: ...
-    networks:
-    - hazelcast-network
-networks:
-  default:
-    name: hazelcast-network
-    external: true
+truncate -s 0 /var/lib/docker/containers/*/*-json.log
 
--- Kafka on OSX --
-
-Just does not work the same as on Linux and ?!
+-- Kafka --
 
 This page explains how listeners work and help understand it all -> docker-compose.yml
 https://rmoff.net/2018/08/02/kafka-listeners-explained/
 
-These pages also answer the question
+These pages also answer some questions
 https://github.com/confluentinc/cp-docker-images/issues/265
 https://stackoverflow.com/questions/64805874/problem-with-advertised-listener-on-macos
 https://github.com/confluentinc/demo-scene/blob/master/kafka-ecosystem/docker-compose.yml#L1-L45
 
-BUT loading the Kafka native library fails, too
+BUT 
+
+Loading the Kafka native library fails, too
 https://github.com/confluentinc/confluent-kafka-dotnet/issues/1755
 https://github.com/confluentinc/confluent-kafka-dotnet/issues/1769
 
 Supposedly they'll fix it but even with 1.9.2-RC2 we still see the issue
+So at the moment, the demo CANNOT run on an M1 Mac, neither on the host nor in Docker
+
+see https://github.com/confluentinc/cp-docker-images/issues/265
+see https://github.com/confluentinc/confluent-kafka-dotnet/issues/1755
+see https://github.com/confluentinc/confluent-kafka-dotnet/issues/1769
 
 -- Docker --
 
 see https://docs.microsoft.com/en-us/dotnet/core/docker/build-container
 
 go to solution's root (where Dockerfile lives) and do:
-docker build -t dotnetstockdemo -f Dockerfile .
 
-or
 docker build -t zpqrtbnk/dotnetstockdemo -f Dockerfile .
 docker tag <local-image>:<tagname> <repo>:<tagname>
 docker tag zpqrtbnk/dotnetstockdemo:latest zpqrtbnk/dotnetstockdemo:1.0.0
@@ -108,43 +64,13 @@ see https://developer.confluent.io/quickstart/kafka-docker/
 see https://www.confluent.io/blog/kafka-listeners-explained/
 see https://github.com/rmoff/kafka-listeners/blob/master/docker-compose.yml
 
--> prepare docker-compose.yml
-
-then
-cd Docker
-edit docker-compose.yml if necessary to adjust IPs and ports
-docker-compose up -d
-docker-compose ps
-docker-compose stop
-
-troubleshooting:
-docker run -it --rm --network docker_default confluentinc/cp-kafkacat kafkacat -b kafka:9092 -L
-docker run -it --rm --network docker_default confluentinc/cp-kafkacat kafkacat -b kafka:29092 -L
-docker ps
-docker exec -it <id> /bin/bash
-truncate -s 0 /var/lib/docker/containers/*/*-json.log
-
 -- Appendix - Kafka issues in OSX --
 
-see https://github.com/confluentinc/cp-docker-images/issues/265
-see https://github.com/confluentinc/confluent-kafka-dotnet/issues/1755
-see https://github.com/confluentinc/confluent-kafka-dotnet/issues/1769
 
 -- Appendix --
 
-Make want to create a hazelcast-network Docker network?
-
-Start Kafka?
-docker run --name kafka --network hazelcast-network --rm hazelcast/hazelcast-quickstart-kafka
-
-Start Hazelcast?
-docker run -it --network hazelcast-network --rm -e HZ_CLUSTERNAME=dotnetstockdemo -p 5701:5701 hazelcast/hazelcast:5.1.2
-
 Run SQL cli:
 docker run --network hazelcast-network -it --rm hazelcast/hazelcast:5.1.2 hz-cli --targets username@172.18.0.2 sql
-
-
-
 
 resources
 [1] https://www.red-gate.com/simple-talk/development/dotnet-development/using-apache-kafka-with-net/
