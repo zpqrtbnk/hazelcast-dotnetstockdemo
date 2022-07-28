@@ -95,8 +95,8 @@ services:
     depends_on:
       - kafka
       - hazelcast
-#    networks:
-#      - dotnetstockdemo
+    #networks:
+    #  - dotnetstockdemo
     environment:
       # these will override the demo options
       DotNetStockDemo__HazelcastServer: hazelcast-1
