@@ -89,6 +89,47 @@ https://github.com/confluentinc/confluent-kafka-dotnet/issues/1769
 
 Supposedly they'll fix it but even with 1.9.2-RC2 we still see the issue
 
+-- Docker --
+
+see https://docs.microsoft.com/en-us/dotnet/core/docker/build-container
+
+go to solution's root (where Dockerfile lives) and do:
+docker build -t dotnetstockdemo -f Dockerfile .
+
+or
+docker build -t zpqrtbnk/dotnetstockdemo -f Dockerfile .
+docker tag <local-image>:<tagname> <repo>:<tagname>
+docker tag zpqrtbnk/dotnetstockdemo:latest zpqrtbnk/dotnetstockdemo:1.0.0
+docker login --username=zpqrtbnk
+docker push zpqrtbnk/dotnetstockdemo:latest
+docker logout
+
+see https://developer.confluent.io/quickstart/kafka-docker/
+see https://www.confluent.io/blog/kafka-listeners-explained/
+see https://github.com/rmoff/kafka-listeners/blob/master/docker-compose.yml
+
+-> prepare docker-compose.yml
+
+then
+cd Docker
+edit docker-compose.yml if necessary to adjust IPs and ports
+docker-compose up -d
+docker-compose ps
+docker-compose stop
+
+troubleshooting:
+docker run -it --rm --network docker_default confluentinc/cp-kafkacat kafkacat -b kafka:9092 -L
+docker run -it --rm --network docker_default confluentinc/cp-kafkacat kafkacat -b kafka:29092 -L
+docker ps
+docker exec -it <id> /bin/bash
+truncate -s 0 /var/lib/docker/containers/*/*-json.log
+
+-- Appendix - Kafka issues in OSX --
+
+see https://github.com/confluentinc/cp-docker-images/issues/265
+see https://github.com/confluentinc/confluent-kafka-dotnet/issues/1755
+see https://github.com/confluentinc/confluent-kafka-dotnet/issues/1769
+
 -- Appendix --
 
 Make want to create a hazelcast-network Docker network?
